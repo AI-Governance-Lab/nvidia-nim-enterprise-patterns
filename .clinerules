@@ -1,0 +1,40 @@
+# ==========================================
+# CLINE SYSTEM RULES (.clinerules)
+# Optimize coding performance, prevent freezes & loops
+# ==========================================
+
+# 1. File Editing & Modification
+- ALWAYS prefer `replace_in_file` over `write_to_file` for existing files. Never rewrite a whole file unless it is very small (< 50 lines) or completely restructured. This prevents huge token transfer and IDE freezes.
+- Ensure SEARCH blocks match character-for-character, including exact whitespace and indentation.
+- Do not truncate lines inside SEARCH/REPLACE blocks. Always use complete lines.
+- NEVER use placeholder comments (e.g., "// ... rest of the code", "# existing logic here") inside REPLACE blocks. Always provide the full, functional code for the replacement section to avoid breaking the file.
+- Before attempting a replace_in_file, if you are unsure about the exact indentation or whitespace of the target block, use read_file with specific line numbers to inspect the exact characters first.
+
+# 2. Workspace Scanning & Searching
+- NEVER run broad, generic grep commands (like `grep -r "pattern" .` or similar) in the terminal. Use the optimized `search_files` tool instead.
+- Do not list directories recursively unless absolutely necessary.
+- Respect the `.clineignore` file at all times. Do not attempt to read or search ignored directories like database folders, node_modules, build outputs, or environments.
+
+# 3. Terminal & Shell Operations
+- Always use non-interactive flags (e.g., `-y` or `--non-interactive`) for package installs or system commands to avoid getting stuck waiting for stdin.
+- For background services or long-running commands, run them detached/in the background. Never let a command block the terminal execution.
+- If a command's success is unverified, check the file or process status explicitly rather than assuming it worked.
+- **Avoid Exclamation Marks in Commands:** NEVER use the exclamation mark (`!`) inside double-quoted string arguments or python/node scripts inside `execute_command`. This triggers Bash history expansion (`bash: !: event not found`), crashing or hanging the execution. Use single quotes, escape it as `\!`, or omit it entirely in tests.
+
+# 4. Context & Efficiency
+- Keep your thought process structured, clear, and direct. Avoid repeating large blocks of code or files in your explanations.
+- Present precise, working, and minimal code edits that satisfy the exact user requirement without adding unrequested complexity.
+- If a file is extremely large, read only the relevant sections using `start_line` and `end_line` parameters.
+
+# 5. Preventing "Thinking Loops" & Handling Missing Capabilities (e.g. Web Search)
+- **Do NOT Fake Web Search:** If you are asked to search the live web, browse external URLs, or find real-time information, and you do NOT have a native, reliable search tool:
+  - **NEVER** write complex custom python scraping scripts (using requests, BeautifulSoup, selenium, etc.) or trigger infinite terminal curl loops to bypass search blocks. These get blocked/flagged by web servers, leading to errors and infinite thinking loops.
+  - **INSTEAD:** Immediately explain this limitation to the user clearly and politely, and ask them to paste the source text, documentation, or search results directly into the chat.
+- **Breaking Loops (The 3-Strike Rule):** If you hit the same error or write/modify the same block of code 3 times without succeeding, STOP immediately. Do not try a 4th time with a minor variation. Use the `ask_followup_question` tool to consult the user or ask for guidance.
+- **Hanging Processes:** Avoid executing commands that do not immediately exit or return structured output. If a command runs, ensure it has a quick timeout or runs detached.
+
+# 6. Gemini Flash Specific Optimizations & Parallel Tool Guidance
+- **Enforce Code Completeness:** You are a fast model, but you must not sacrifice correctness for speed. Do not rush edits. Double-check syntax, missing brackets, and trailing commas before executing a file change.
+- **Strict Typing & Language Nuances:** When writing statically-typed languages (like TypeScript, Go, or C++), explicitly declare types and avoid using lazy fallbacks like `any` unless explicitly instructed.
+- **Self-Correction Check:** Since you operate at a high speed, spend a moment in your `<thinking>` block to dry-run the logic of your edits before applying them. Verify that your change does not break unrelated variables in the same scope.
+- **Parallel Tool-Calling Constraint:** When executing multiple file operations or tool actions sequentially, wait for the definitive result of the previous tool call before generating the next step. Do not batch assumptions or invoke conflicting tool calls simultaneously.

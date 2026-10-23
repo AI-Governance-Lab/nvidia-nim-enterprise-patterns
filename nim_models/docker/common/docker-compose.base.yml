@@ -1,0 +1,21 @@
+# =============================================================================
+# NVIDIA NIM - Base Compose Configuration with GPU Runtime
+# =============================================================================
+version: "3.8"
+
+services:
+  nim-base:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+    volumes:
+      - ${LOCAL_NIM_CACHE:-~/.cache/nim}:/opt/nim/.cache
+    restart: unless-stopped
+    shm_size: "16gb"
+    ipc: host

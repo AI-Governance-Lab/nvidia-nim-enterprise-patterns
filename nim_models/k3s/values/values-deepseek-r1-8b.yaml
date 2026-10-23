@@ -1,0 +1,46 @@
+# =============================================================================
+# Helm Values for DeepSeek-R1-Distill-Llama-8B on K3s / Kubernetes
+# Chart: nvidia-nim/nim-llm
+# Target Hardware: 1x NVIDIA L4 (24GB VRAM)
+# =============================================================================
+image:
+  repository: nvcr.io/nim/deepseek-ai/deepseek-r1-distill-llama-8b
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ngc-registry-secret
+
+model:
+  name: deepseek-ai/deepseek-r1-distill-llama-8b
+  ngcAPISecret: ngc-secret
+
+resources:
+  limits:
+    nvidia.com/gpu: 1
+    memory: 32Gi
+  requests:
+    nvidia.com/gpu: 1
+    cpu: "4"
+    memory: 24Gi
+
+persistence:
+  enabled: true
+  existingClaim: nim-model-cache-pvc
+  mountPath: /opt/nim/.cache
+
+shmSize: 16Gi
+
+service:
+  type: ClusterIP
+  port: 8000
+
+probes:
+  readiness:
+    path: /v1/health/ready
+    initialDelaySeconds: 60
+    periodSeconds: 15
+  liveness:
+    path: /v1/health/live
+    initialDelaySeconds: 120
+    periodSeconds: 30

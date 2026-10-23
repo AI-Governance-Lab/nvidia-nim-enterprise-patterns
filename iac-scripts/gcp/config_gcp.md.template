@@ -1,0 +1,231 @@
+# Configurare GCP pentru MIG NVIDIA — Template
+
+> **Notă**: Acest fișier este un template. Înlocuiește toate valorile `YOUR_*` cu datele tale reale.
+> Nu comita fișiere cu valori reale în repository public!
+
+Acest ghid configurează infrastructura GPU din `iac-scripts/gcp/mig-nvidia` folosind:
+
+- utilizatorul Google `YOUR_GCP_USER@yourdomain.com` pentru Terraform;
+- un service account separat, `gpu-compute`, atașat instanțelor Compute Engine;
+- service account-ul existent pentru Vertex AI, păstrat separat și nemodificat.
+
+## 1. Contextul GCP
+
+Rulează comenzile de mai jos în terminal:
+
+```bash
+cd /path/to/nvidia-nim-enterprise-patterns/iac-scripts/gcp/mig-nvidia
+
+gcloud config set project YOUR_PROJECT_ID
+gcloud config set account YOUR_GCP_USER@yourdomain.com
+```
+
+Verifică identitatea activă:
+
+```bash
+gcloud auth list
+gcloud config get-value account
+gcloud config get-value project
+```
+
+## 2. Login în browser pentru Terraform
+
+Terraform folosește Application Default Credentials (ADC) ale utilizatorului tău. Autentificarea se face în browser:
+
+```bash
+gcloud auth login YOUR_GCP_USER@yourdomain.com
+gcloud auth application-default login YOUR_GCP_USER@yourdomain.com
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+Verifică tokenul ADC fără să-l afișezi:
+
+```bash
+gcloud auth application-default print-access-token >/dev/null \
+&& echo "ADC token: OK"
+```
+
+## 3. Separarea credențialelor Vertex AI
+
+Dacă folosești un service account JSON pentru Vertex AI, păstrează-l separat, de exemplu:
+
+```bash
+/path/to/your/vertex-ai-credentials.json
+```
+
+Nu îl folosi pentru Terraform și nu îl șterge. Înainte de comenzile Terraform, elimină variabila de mediu care ar forța folosirea acelui JSON:
+
+```bash
+unset GOOGLE_APPLICATION_CREDENTIALS
+```
+
+Pentru aplicațiile Vertex AI, variabila poate fi setată din nou separat:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/vertex-ai-credentials.json
+```
+
+## 4. Crearea service account-ului Compute
+
+Creează o singură dată service account-ul pentru instanțele GPU:
+
+```bash
+gcloud iam service-accounts create gpu-compute \
+--display-name="GPU Compute Engine SA" \
+--project=YOUR_PROJECT_ID
+```
+
+Email-ul SA-ului este:
+
+```text
+gpu-compute@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+Dacă SA-ul există deja, nu repeta comanda de creare.
+
+## 5. Rolurile IAM pentru SA-ul Compute
+
+Acordă permisiuni pentru scrierea logurilor și metricilor:
+
+```bash
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+--member="serviceAccount:gpu-compute@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+--role="roles/logging.logWriter"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+--member="serviceAccount:gpu-compute@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+--role="roles/monitoring.metricWriter"
+```
+
+Utilizatorul tău trebuie să poată atașa acest SA instanțelor Compute Engine:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+gpu-compute@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+--member="user:YOUR_GCP_USER@yourdomain.com" \
+--role="roles/iam.serviceAccountUser" \
+--project=YOUR_PROJECT_ID
+```
+
+## 6. Configurarea Terraform
+
+În `main-mig.tf`, providerul Google trebuie să folosească ADC, fără o cale hardcodată către un JSON:
+
+```hcl
+provider "google" {
+project = var.project_id
+region  = var.region
+}
+```
+
+În `google_compute_instance_template`, SA-ul Compute se atașează astfel:
+
+```hcl
+service_account {
+  email  = var.compute_service_account_email
+  scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+}
+```
+
+Variabilele `project_id` și `compute_service_account_email` sunt definite în `main-mig.tf` **fără default values** — le vei seta în `terraform.tfvars` (vezi `terraform.tfvars.example`).
+
+## 7. Deploy
+
+```bash
+# 1. Copiază example-ul și editează cu valorile tale
+cp terraform.tfvars.example terraform.tfvars
+# Editează terraform.tfvars cu editorul preferat
+
+# 2. Inițializează și aplică
+terraform init
+terraform plan -out=plan1
+terraform apply plan1
+```
+
+### Schimbarea rapidă a regiunii
+
+Un MIG regional poate folosi zone dintr-o singură regiune. Pentru a muta deployment-ul, schimbă `region` și `zones` împreună în `terraform.tfvars`.
+
+Exemplu pentru L4 în `us-east4`:
+
+```hcl
+region = "us-east4"
+zones  = ["us-east4-a", "us-east4-b", "us-east4-c"]
+```
+
+Exemplu pentru L4 în `europe-west4`:
+
+```hcl
+region = "europe-west4"
+zones  = ["europe-west4-a", "europe-west4-b", "europe-west4-c"]
+```
+
+După schimbare, verifică întâi acceleratorul și subnetul default:
+
+```bash
+gcloud compute accelerator-types list \
+--filter="name='nvidia-l4' AND zone~'^us-east4-'" \
+--format="table(name,zone)"
+
+gcloud compute networks subnets list \
+--network=default \
+--regions=us-east4 \
+--project=YOUR_PROJECT_ID
+```
+
+Apoi aplică schimbarea:
+
+```bash
+terraform plan -out=plan1
+terraform apply plan1
+```
+
+## 8. Verificări după apply
+
+Verifică SA-ul Compute:
+
+```bash
+gcloud iam service-accounts describe \
+gpu-compute@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+--project=YOUR_PROJECT_ID
+```
+
+Verifică instanțele MIG:
+
+```bash
+gcloud compute instance-groups managed list \
+--region=us-central1 \
+--project=YOUR_PROJECT_ID
+
+gcloud compute instances list \
+--project=YOUR_PROJECT_ID
+```
+
+Verifică zonele în care Google Cloud oferă acceleratoare NVIDIA L4 și T4:
+
+```bash
+gcloud compute accelerator-types list \
+--filter="name~'nvidia-l4|nvidia-tesla-t4'" \
+--format="table(name,zone)"
+```
+
+> **Notă**: Outputul de mai jos este exemplu generic. Rulează comanda de mai sus în proiectul tău pentru zonele reale disponibile.
+
+După conectarea prin SSH, logurile startup script-ului sunt disponibile aici:
+
+```bash
+sudo tail -f /var/log/gpu-startup-script.log
+```
+
+Verificări utile pe instanță:
+
+```bash
+free -h
+nvidia-smi
+docker --version
+docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
+```
+
+## Notă de securitate
+
+Nu crea o cheie JSON pentru `gpu-compute` decât dacă ai un caz explicit care necesită autentificare de tip service-account key. Pentru Terraform se folosește login-ul ADC în browser cu utilizatorul tău, iar pentru VM se folosește identitatea atașată instanței prin metadata. **Evită afișarea sau salvarea cheilor în repository.**

@@ -1,0 +1,29 @@
+# =============================================================================
+# Terraform Variables Example for MIG Deployment
+# Copy this file to terraform.tfvars and fill in YOUR values
+# terraform.tfvars is gitignored - never commit real values!
+# =============================================================================
+
+# Required: Your GCP Project ID
+project_id = "your-gcp-project-id"
+
+# Required: Compute Engine Service Account email
+# Create with: gcloud iam service-accounts create gpu-compute --project=YOUR_PROJECT_ID
+# Format: name@project.iam.gserviceaccount.com
+compute_service_account_email = "gpu-compute@your-gcp-project-id.iam.gserviceaccount.com"
+
+# Optional: Region and zones (change together for GPU availability)
+region = "us-central1"
+zones  = ["us-central1-a", "us-central1-b", "us-central1-c"]
+
+# Optional: GPU type (L4 or T4)
+gpu_type = "L4"
+
+# Optional: Use Spot VMs for cost savings (true/false)
+is_spot = false
+
+# Optional: Number of GPU instances in the MIG
+target_size = 1
+
+# Optional: Allowed IP/CIDR for SSH and API access (restrict in production!)
+my_external_ip = "0.0.0.0/0"

@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  llama-3.1-8b:
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:latest
+    container_name: llama-3.1-8b
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NGC_API_KEY=${NGC_API_KEY}
+    volumes:
+      - ${LOCAL_NIM_CACHE:-~/.cache/nim}:/opt/nim/.cache
+    ports:
+      - "${NIM_PORT:-8000}:8000"
+    ipc: host
+    shm_size: "16gb"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/v1/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
