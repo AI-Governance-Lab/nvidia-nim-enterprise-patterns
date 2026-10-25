@@ -45,39 +45,42 @@ This repository bridges **hardware infrastructure provisioning** and **productio
 ## 🏗️ Deployment & Inference Architecture
 
 ```mermaid
-graph TB
-    subgraph Clients["👤 Developer & Application Clients"]
-        IDE["Agentic IDEs\n(Cline / Roo Code / Continue)"]
-        Test["Automated Test Suite\n(tests/test_nim_api.py)"]
-        Operator["Platform Operator\n(Terraform + sync_to_vm.sh)"]
+graph TD
+    subgraph Clients["1. Developer and Application Clients"]
+        IDE["Agentic IDEs (Cline, Roo Code, Continue)"]
+        Test["Automated Test Suite (tests/test_nim_api.py)"]
+        Operator["Platform Operator (Terraform and sync_to_vm.sh)"]
     end
 
-    subgraph Tier1["☁️ Tier 1: Ephemeral GCP GPU Compute (Terraform MIG / Standalone)"]
-        TF["Terraform IaC\nMulti-Zone L4/T4 GPU MIG"]
-        Startup["2-Stage Startup Automation\n32GB Swap • Driver 550/580 • nvidia-ctk"]
-        LiteLLM["LiteLLM Proxy (:4000)\ndrop_params: true • Auth Gate"]
-        NIM_Docker["NVIDIA NIM Container (:8000)\nTensorRT-LLM + Triton Engine"]
-        HostCache["Persistent Host Cache\n(~/.cache/nim)"]
+    subgraph Tier1["2. Tier 1: Ephemeral GCP GPU Compute (Terraform MIG)"]
+        TF["Terraform IaC - Multi-Zone L4 and T4 GPU MIG"]
+        Startup["2-Stage Startup Automation - 32GB Swap, Driver 550/580, nvidia-ctk"]
+        LiteLLM["LiteLLM Proxy (Port 4000) - drop_params and Auth Gate"]
+        NIM_Docker["NVIDIA NIM Container (Port 8000) - TensorRT-LLM and Triton Engine"]
+        HostCache["Persistent Host Cache (~/.cache/nim)"]
     end
 
-    subgraph Tier2["☸️ Tier 2: Enterprise Kubernetes Orchestration (K3s + Helm)"]
-        Ingress["Traefik / NGINX Ingress\nTLS Termination"]
-        K3s_Pod["NIM GPU Pod (nim-serving)\n16Gi /dev/shm IPC"]
-        PVC["Shared PVC (100Gi+)\nCompiled TRT Engine Cache"]
+    subgraph Tier2["3. Tier 2: Enterprise Kubernetes Orchestration (K3s and Helm)"]
+        Ingress["Traefik and NGINX Ingress - TLS Termination"]
+        K3s_Pod["NIM GPU Pod (nim-serving) - 16Gi /dev/shm IPC"]
+        PVC["Shared PVC (100Gi+) - Compiled TRT Engine Cache"]
     end
 
-    NGC["📦 NVIDIA NGC Registry\n(nvcr.io/nim/*)"]
+    NGC["NVIDIA NGC Registry (nvcr.io/nim)"]
 
-    Operator -->|"1. terraform apply"| TF
-    TF --> Startup --> NIM_Docker
-    Operator -->|"2. ./scripts/sync_to_vm.sh"| NIM_Docker
-    IDE -->|"OpenAI API (:4000/v1)"| LiteLLM -->|"Normalized Payload (:8000/v1)"| NIM_Docker
-    Test -->|"Validation & CoT Parsing"| NIM_Docker
-    Test -->|"Validation"| Ingress --> K3s_Pod
-    NIM_Docker <--> HostCache
-    K3s_Pod <--> PVC
-    NGC -->|"Signed Model Pull"| NIM_Docker
-    NGC -->|"Signed Model Pull"| K3s_Pod
+    Operator -->|1. terraform apply| TF
+    TF --> Startup
+    Startup --> NIM_Docker
+    Operator -->|2. sync_to_vm.sh| NIM_Docker
+    IDE -->|OpenAI API 4000| LiteLLM
+    LiteLLM -->|Normalized 8000| NIM_Docker
+    Test -->|Validation and CoT| NIM_Docker
+    Test -->|Validation| Ingress
+    Ingress --> K3s_Pod
+    NIM_Docker --> HostCache
+    K3s_Pod --> PVC
+    NGC -->|Signed Model Pull| NIM_Docker
+    NGC -->|Signed Model Pull| K3s_Pod
 ```
 
 ---
